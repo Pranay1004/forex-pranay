@@ -1,0 +1,15 @@
+{"timestamp": "2026-02-24T00:27:52.225190", "type": "START", "message": "Monitor started for https://forexp.streamlit.app", "response_time_ms": null, "status_code": null}
+{"timestamp": "2026-02-24T00:27:54.591810", "type": "UP", "message": "Streamlit app is healthy", "response_time_ms": 2366.314172744751, "status_code": 200}
+{"timestamp": "2026-02-24T00:28:56.854094", "type": "UP", "message": "Streamlit app is healthy", "response_time_ms": 2255.8820247650146, "status_code": 200}
+{"timestamp": "2026-02-24T00:29:59.049332", "type": "UP", "message": "Streamlit app is healthy", "response_time_ms": 2188.692092895508, "status_code": 200}
+{"timestamp": "2026-02-24T00:31:01.778705", "type": "UP", "message": "Streamlit app is healthy", "response_time_ms": 2721.3947772979736, "status_code": 200}
+{"timestamp": "2026-02-24T00:32:04.449628", "type": "UP", "message": "Streamlit app is healthy", "response_time_ms": 2663.9339923858643, "status_code": 200}
+{"timestamp": "2026-02-24T00:33:06.867571", "type": "UP", "message": "Streamlit app is healthy", "response_time_ms": 2409.7728729248047, "status_code": 200}
+{"timestamp": "2026-02-24T00:34:09.173617", "type": "UP", "message": "Streamlit app is healthy", "response_time_ms": 2299.546957015991, "status_code": 200}
+{"timestamp": "2026-02-24T00:35:11.439523", "type": "UP", "message": "Streamlit app is healthy", "response_time_ms": 2258.430004119873, "status_code": 200}
+{"timestamp": "2026-02-24T00:36:13.694948", "type": "UP", "message": "Streamlit app is healthy", "response_time_ms": 2246.5898990631104, "status_code": 200}
+{"timestamp": "2026-02-24T00:37:16.157072", "type": "UP", "message": "Streamlit app is healthy", "response_time_ms": 2452.7664184570312, "status_code": 200}
+{"timestamp": "2026-02-24T00:38:18.472855", "type": "UP", "message": "Streamlit app is healthy", "response_time_ms": 2308.941125869751, "status_code": 200}
+{"timestamp": "2026-02-24T00:39:20.757269", "type": "UP", "message": "Streamlit app is healthy", "response_time_ms": 2276.9150733947754, "status_code": 200}
+{"timestamp": "2026-02-24T00:40:22.850341", "type": "UP", "message": "Streamlit app is healthy", "response_time_ms": 2086.580276489258, "status_code": 200}
+{"timestamp": "2026-02-24T00:41:27.144563", "type": "UP", "message": "Streamlit app is healthy", "response_time_ms": 4284.865140914917, "status_code": 200}
