@@ -423,6 +423,10 @@ def app() -> None:
         auto_refresh = st.checkbox("Realtime refresh", value=True)
         refresh_sec = st.slider("Refresh seconds", 10, 180, 30)
         st.subheader("Backtest params")
+        default_start = pd.Timestamp("2015-01-01").date()
+        default_end = pd.Timestamp("2026-02-01").date()
+        bt_start_date = st.date_input("Backtest start date", value=default_start)
+        bt_end_date = st.date_input("Backtest end date", value=default_end)
         sl_atr = st.number_input("SL ATR", 0.5, 5.0, 1.5, 0.1)
         tp_atr = st.number_input("TP ATR", 0.8, 10.0, 2.5, 0.1)
         risk_pct = st.number_input("Risk per trade (%)", 0.1, 3.0, 1.0, 0.1)
@@ -445,9 +449,24 @@ def app() -> None:
     tabs = st.tabs(["Backtest Chart", "Realtime Dashboard"])
 
     with tabs[0]:
-        replay_bars = st.slider("Replay candles (last N bars)", min_value=200, max_value=min(2500, len(df)), value=min(900, len(df)), step=50)
-        replay_df = df.tail(replay_bars)
+        if bt_start_date > bt_end_date:
+            st.error("Backtest start date must be before end date.")
+            st.stop()
+
+        bt_start_utc = pd.Timestamp(bt_start_date).tz_localize(UTC)
+        bt_end_utc_exclusive = (pd.Timestamp(bt_end_date) + pd.Timedelta(days=1)).tz_localize(UTC)
+        dated_df = df[(df.index >= bt_start_utc) & (df.index < bt_end_utc_exclusive)].copy()
+
+        if dated_df.empty:
+            st.warning("No candles available in selected range for this timeframe/source.")
+            st.stop()
+
+        replay_cap = min(2500, len(dated_df))
+        replay_default = min(1200, len(dated_df))
+        replay_bars = st.slider("Replay candles (last N bars from selected date range)", min_value=min(200, replay_cap), max_value=replay_cap, value=max(min(200, replay_default), replay_default), step=50 if replay_cap >= 250 else 10)
+        replay_df = dated_df.tail(replay_bars)
         replay_df_ist = to_ist(replay_df)
+        st.caption(f"Backtest window (IST display): {bt_start_date} → {bt_end_date} | Candles in window: {len(dated_df)} | Using last {len(replay_df)} candles for replay")
 
         if run_backtest_btn or "last_bt" not in st.session_state:
             eq, trades, stats = run_backtest(
@@ -460,10 +479,10 @@ def app() -> None:
                 spread_pips=spread_pips,
                 use_mtf_filter=use_mtf_filter,
             )
-            st.session_state["last_bt"] = (eq, trades, stats, pair, timeframe, replay_bars)
+            st.session_state["last_bt"] = (eq, trades, stats, pair, timeframe, replay_bars, str(bt_start_date), str(bt_end_date))
 
-        eq, trades, stats, bt_pair, bt_tf, bt_replay = st.session_state["last_bt"]
-        if (bt_pair != pair) or (bt_tf != timeframe) or (bt_replay != replay_bars):
+        eq, trades, stats, bt_pair, bt_tf, bt_replay, bt_start, bt_end = st.session_state["last_bt"]
+        if (bt_pair != pair) or (bt_tf != timeframe) or (bt_replay != replay_bars) or (bt_start != str(bt_start_date)) or (bt_end != str(bt_end_date)):
             eq, trades, stats = run_backtest(
                 pair=pair,
                 timeframe=timeframe,
@@ -474,7 +493,7 @@ def app() -> None:
                 spread_pips=spread_pips,
                 use_mtf_filter=use_mtf_filter,
             )
-            st.session_state["last_bt"] = (eq, trades, stats, pair, timeframe, replay_bars)
+            st.session_state["last_bt"] = (eq, trades, stats, pair, timeframe, replay_bars, str(bt_start_date), str(bt_end_date))
 
         if "error" in stats:
             st.warning(stats["error"])
