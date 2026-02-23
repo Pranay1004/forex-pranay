@@ -1,0 +1,1 @@
+trade_id,pair,direction,entry_price,exit_price,position_size,lot_size,stop_loss,take_profit,pnl_pips,pnl_usd,duration_bars,entry_time,exit_time,exit_reason,model_confidence,regime_at_entry,sentiment_at_entry

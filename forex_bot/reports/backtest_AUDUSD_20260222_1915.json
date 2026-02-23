@@ -1,0 +1,16 @@
+{
+  "total_trades": 18,
+  "win_rate": 55.55555555555556,
+  "profit_factor": 1.848,
+  "sharpe_ratio": 4.843,
+  "sortino_ratio": 41.431,
+  "max_drawdown_pct": 3.42,
+  "net_pnl_usd": 738.68,
+  "avg_win_usd": 160.94,
+  "avg_loss_usd": -108.84,
+  "expectancy_usd": 41.04,
+  "final_equity": 10738.68,
+  "return_pct": 7.39,
+  "pair": "AUD/USD",
+  "generated_at": "2026-02-22T19:15:48.259705"
+}

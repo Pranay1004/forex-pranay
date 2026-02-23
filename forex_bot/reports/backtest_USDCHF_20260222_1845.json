@@ -1,0 +1,16 @@
+{
+  "total_trades": 17,
+  "win_rate": 76.47058823529412,
+  "profit_factor": 4.552,
+  "sharpe_ratio": 13.004,
+  "sortino_ratio": 591.089,
+  "max_drawdown_pct": 1.12,
+  "net_pnl_usd": 1757.25,
+  "avg_win_usd": 173.23,
+  "avg_loss_usd": -123.7,
+  "expectancy_usd": 103.37,
+  "final_equity": 11757.25,
+  "return_pct": 17.57,
+  "pair": "USD/CHF",
+  "generated_at": "2026-02-22T18:45:25.211694"
+}
