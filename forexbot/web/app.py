@@ -1,4 +1,5 @@
 import math
+import os
 from dataclasses import dataclass
 from datetime import timezone
 
@@ -10,7 +11,18 @@ import streamlit as st
 import yfinance as yf
 from zoneinfo import ZoneInfo
 
-from forexbot.config import TWELVEDATA_API_KEY
+
+def _get_secret(key: str, default: str = "") -> str:
+    """Read secret from Streamlit Cloud secrets, fallback to env vars."""
+    try:
+        if key in st.secrets:
+            return str(st.secrets[key])
+    except Exception:
+        pass
+    return os.getenv(key, default)
+
+
+TWELVEDATA_API_KEY = _get_secret("TWELVEDATA_API_KEY", "")
 
 IST = ZoneInfo("Asia/Kolkata")
 UTC = timezone.utc
