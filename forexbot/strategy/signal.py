@@ -13,6 +13,12 @@ import pandas as pd
 from forexbot.config import CONFIDENCE_THRESHOLD
 from forexbot.models.ensemble import EnsembleResult, BUY, SELL, HOLD
 from forexbot.strategy.risk import TradeParameters, calculate_trade_parameters
+from forexbot.config import (
+    MIN_DIRECTIONAL_PROB,
+    MIN_PROB_EDGE,
+    PERFORMANCE_GUARD_MIN_RR,
+    PERFORMANCE_GUARD_MIN_WIN_RATE,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +82,64 @@ def generate_signal(
     confidence = ensemble_result.confidence
 
     if direction == HOLD or confidence < CONFIDENCE_THRESHOLD:
+        return TradeSignal(
+            pair=pair,
+            direction=HOLD,
+            confidence=confidence,
+            entry_price=current_price,
+            params=None,
+            regime=regime,
+            sentiment_score=sentiment_score,
+            ensemble=ensemble_result,
+        )
+
+    buy_prob = float(ensemble_result.buy_prob)
+    hold_prob = float(ensemble_result.hold_prob)
+    sell_prob = float(ensemble_result.sell_prob)
+    probs = np.array([buy_prob, hold_prob, sell_prob], dtype=float)
+    sorted_probs = np.sort(probs)
+    prob_edge = float(sorted_probs[-1] - sorted_probs[-2])
+    directional_prob = buy_prob if direction == BUY else sell_prob
+
+    if directional_prob < MIN_DIRECTIONAL_PROB or prob_edge < MIN_PROB_EDGE:
+        logger.info(
+            "%s: signal blocked by quality gate | dir_prob=%.3f edge=%.3f",
+            pair,
+            directional_prob,
+            prob_edge,
+        )
+        return TradeSignal(
+            pair=pair,
+            direction=HOLD,
+            confidence=confidence,
+            entry_price=current_price,
+            params=None,
+            regime=regime,
+            sentiment_score=sentiment_score,
+            ensemble=ensemble_result,
+        )
+
+    if (direction == BUY and regime == 2) or (direction == SELL and regime == 1):
+        logger.info("%s: signal blocked by regime alignment | direction=%d regime=%d", pair, direction, regime)
+        return TradeSignal(
+            pair=pair,
+            direction=HOLD,
+            confidence=confidence,
+            entry_price=current_price,
+            params=None,
+            regime=regime,
+            sentiment_score=sentiment_score,
+            ensemble=ensemble_result,
+        )
+
+    rr = (avg_win / avg_loss) if avg_loss > 0 else 1.0
+    if win_rate < PERFORMANCE_GUARD_MIN_WIN_RATE and rr < PERFORMANCE_GUARD_MIN_RR:
+        logger.info(
+            "%s: signal blocked by performance guard | win_rate=%.3f rr=%.3f",
+            pair,
+            win_rate,
+            rr,
+        )
         return TradeSignal(
             pair=pair,
             direction=HOLD,

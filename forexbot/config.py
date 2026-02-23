@@ -38,6 +38,10 @@ TIME_EXIT_BARS: int = 24                  # close after 24 H1 bars
 # ─── Models ──────────────────────────────────────────────────────────────────
 OPTUNA_TRIALS: int = 50                       # thorough hyperparameter search
 CONFIDENCE_THRESHOLD: float = 0.55
+MIN_DIRECTIONAL_PROB: float = 0.58            # min BUY/SELL class prob to allow entry
+MIN_PROB_EDGE: float = 0.07                   # min gap between top-1 and top-2 class probs
+PERFORMANCE_GUARD_MIN_WIN_RATE: float = 0.47  # block entries when recent win-rate degrades
+PERFORMANCE_GUARD_MIN_RR: float = 1.00        # require avg_win/avg_loss >= this when win-rate weak
 TABPFN_MAX_SAMPLES: int = 1000
 TABPFN_MAX_FEATURES: int = 50            # PCA target if too many features
 WALK_FORWARD_FOLDS: int = 5
