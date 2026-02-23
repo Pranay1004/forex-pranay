@@ -54,6 +54,22 @@ class Trade:
     reason: str
 
 
+STRATEGY_PROFILES = {
+    "strat1": {
+        "name": "Strategy 1 — Trend Breakout Pro",
+        "description": "Trades breakout continuation in trend direction using EMA alignment, RSI strength, and volatility guard.",
+    },
+    "strat2": {
+        "name": "Strategy 2 — Mean Reversion Bounce",
+        "description": "Fades stretched moves back toward trend equilibrium using RSI extremes and EMA context.",
+    },
+    "strat3": {
+        "name": "Strategy 3 — Momentum Pullback Sniper",
+        "description": "Enters pullbacks inside strong trend after breakout confirmation and momentum re-acceleration.",
+    },
+}
+
+
 def _inject_autorefresh(enabled: bool, seconds: int) -> None:
     if not enabled:
         return
@@ -68,16 +84,19 @@ def _inject_autorefresh(enabled: bool, seconds: int) -> None:
     )
 
 
-@st.cache_data(ttl=45, show_spinner=False)
+@st.cache_data(ttl=3600, show_spinner=False)
 def _fetch_twelvedata(pair: str, timeframe: str, outputsize: int = 5000) -> pd.DataFrame:
     if not TWELVEDATA_API_KEY:
         return pd.DataFrame()
     symbol = f"{pair[:3]}/{pair[3:]}"
     interval = TF_MAP[timeframe]["td"]
+    # For daily, we can get much more data. Let's maximize it.
+    # 5000 is the max for intraday, but for daily we can get more by omitting it.
+    final_outputsize = 40000 if interval == "1day" else outputsize
     params = {
         "symbol": symbol,
         "interval": interval,
-        "outputsize": outputsize,
+        "outputsize": final_outputsize,
         "apikey": TWELVEDATA_API_KEY,
         "format": "JSON",
         "timezone": "UTC",
@@ -106,15 +125,17 @@ def _fetch_twelvedata(pair: str, timeframe: str, outputsize: int = 5000) -> pd.D
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=45, show_spinner=False)
+@st.cache_data(ttl=3600, show_spinner=False)
 def _fetch_yfinance(pair: str, timeframe: str) -> pd.DataFrame:
     ticker = f"{pair}=X"
     interval = TF_MAP[timeframe]["yf"]
     period_days = TF_MAP[timeframe]["period_days"]
     try:
+        # Use "max" period for daily to get all available history
         if timeframe == "1d":
             hist = yf.download(ticker, period="max", interval=interval, auto_adjust=False, progress=False)
         else:
+            # For intraday, fetch a much larger window to ensure we have enough data for backtests
             hist = yf.download(ticker, period=f"{period_days}d", interval=interval, auto_adjust=False, progress=False)
         if hist.empty:
             return pd.DataFrame()
@@ -199,6 +220,8 @@ def run_backtest(
     risk_pct: float,
     spread_pips: float,
     use_mtf_filter: bool,
+    strategy_key: str,
+    progress_cb=None,
 ) -> tuple[pd.DataFrame, list[Trade], dict]:
     data = add_indicators(df)
     if len(data) < 400:
@@ -227,10 +250,28 @@ def run_backtest(
     trades: list[Trade] = []
     equity_curve: list[tuple[pd.Timestamp, float]] = []
 
-    for ts, row in data.iterrows():
+    total_bars = len(data)
+    for idx, (ts, row) in enumerate(data.iterrows(), start=1):
+        if progress_cb and (idx == 1 or idx % 10 == 0 or idx == total_bars):
+            progress_cb(idx, total_bars, ts)
+
         close_price = float(row["Close"])
-        long_signal = (row["ema_fast"] > row["ema_slow"]) and (52 <= row["rsi_14"] <= 72) and bool(row["breakout_up"]) and (0.0004 <= row["natr"] <= 0.02)
-        short_signal = (row["ema_fast"] < row["ema_slow"]) and (28 <= row["rsi_14"] <= 48) and bool(row["breakout_dn"]) and (0.0004 <= row["natr"] <= 0.02)
+        ema_fast = float(row["ema_fast"])
+        ema_slow = float(row["ema_slow"])
+        rsi_14 = float(row["rsi_14"])
+        breakout_up = bool(row["breakout_up"])
+        breakout_dn = bool(row["breakout_dn"])
+        natr = float(row["natr"])
+
+        if strategy_key == "strat2":
+            long_signal = (ema_fast >= ema_slow) and (rsi_14 <= 35) and (0.0004 <= natr <= 0.03)
+            short_signal = (ema_fast <= ema_slow) and (rsi_14 >= 65) and (0.0004 <= natr <= 0.03)
+        elif strategy_key == "strat3":
+            long_signal = (ema_fast > ema_slow) and (45 <= rsi_14 <= 58) and breakout_up and (0.0003 <= natr <= 0.02)
+            short_signal = (ema_fast < ema_slow) and (42 <= rsi_14 <= 55) and breakout_dn and (0.0003 <= natr <= 0.02)
+        else:
+            long_signal = (ema_fast > ema_slow) and (52 <= rsi_14 <= 72) and breakout_up and (0.0004 <= natr <= 0.02)
+            short_signal = (ema_fast < ema_slow) and (28 <= rsi_14 <= 48) and breakout_dn and (0.0004 <= natr <= 0.02)
 
         if use_mtf_filter and not htf_trend.empty:
             trend_slice = htf_trend[htf_trend.index <= ts]
@@ -444,7 +485,16 @@ def app() -> None:
         risk_pct = st.number_input("Risk per trade (%)", 0.1, 3.0, 1.0, 0.1)
         spread_pips = st.number_input("Spread (pips)", 0.0, 5.0, 0.8, 0.1)
         use_mtf_filter = st.checkbox("Use higher-timeframe trend filter", value=True)
+        strategy_key = st.selectbox(
+            "Backtest algorithm",
+            options=list(STRATEGY_PROFILES.keys()),
+            index=0,
+            format_func=lambda key: STRATEGY_PROFILES[key]["name"],
+        )
+        st.caption(STRATEGY_PROFILES[strategy_key]["description"])
         run_backtest_btn = st.button("Run robust backtest", use_container_width=True)
+        auto_rank_btn = st.button("Auto-Rank & Run Best", use_container_width=True)
+        reset_backtest_btn = st.button("Reset backtest data", use_container_width=True)
 
     _inject_autorefresh(auto_refresh, refresh_sec)
 
@@ -480,21 +530,67 @@ def app() -> None:
         replay_df_ist = to_ist(replay_df)
         st.caption(f"Backtest window (IST display): {bt_start_date} → {bt_end_date} | Candles in window: {len(dated_df)} | Using last {len(replay_df)} candles for replay")
 
-        if run_backtest_btn or "last_bt" not in st.session_state:
-            eq, trades, stats = run_backtest(
-                pair=pair,
-                timeframe=timeframe,
-                df=replay_df,
-                sl_atr=sl_atr,
-                tp_atr=tp_atr,
-                risk_pct=risk_pct,
-                spread_pips=spread_pips,
-                use_mtf_filter=use_mtf_filter,
-            )
-            st.session_state["last_bt"] = (eq, trades, stats, pair, timeframe, replay_bars, str(bt_start_date), str(bt_end_date))
+        if reset_backtest_btn:
+            st.session_state.pop("last_bt", None)
+            st.session_state.pop("last_bt_meta", None)
+            st.cache_data.clear()
+            st.success("Backtest state reset. Fresh data will be used for next run, and live trading view is now clean.")
 
-        eq, trades, stats, bt_pair, bt_tf, bt_replay, bt_start, bt_end = st.session_state["last_bt"]
-        if (bt_pair != pair) or (bt_tf != timeframe) or (bt_replay != replay_bars) or (bt_start != str(bt_start_date)) or (bt_end != str(bt_end_date)):
+        current_meta = {
+            "pair": pair,
+            "timeframe": timeframe,
+            "replay_bars": replay_bars,
+            "bt_start": str(bt_start_date),
+            "bt_end": str(bt_end_date),
+            "sl_atr": float(sl_atr),
+            "tp_atr": float(tp_atr),
+            "risk_pct": float(risk_pct),
+            "spread_pips": float(spread_pips),
+            "use_mtf_filter": bool(use_mtf_filter),
+            "strategy_key": strategy_key,
+        }
+
+        if run_backtest_btn or auto_rank_btn:
+            progress_placeholder = st.empty()
+            progress_bar = st.progress(0, text="Starting backtest...")
+            started_at = pd.Timestamp.now(tz=UTC)
+
+            def _on_progress(done: int, total: int, ts_point: pd.Timestamp) -> None:
+                ratio = done / total if total > 0 else 0.0
+                pct = int(ratio * 100)
+                elapsed = (pd.Timestamp.now(tz=UTC) - started_at).total_seconds()
+                eta_sec = int((elapsed / ratio) - elapsed) if ratio > 0 and elapsed > 0 else 0
+                current_ist = ts_point.tz_convert(IST).strftime("%Y-%m-%d %H:%M")
+                progress_bar.progress(
+                    min(100, max(0, pct)),
+                    text=f"Backtest progress: {pct}% | {done}/{total} bars | ETA: ~{eta_sec}s | At candle: {current_ist} IST",
+                )
+
+            final_strategy = strategy_key
+            if auto_rank_btn:
+                st.info(f"Auto-ranking strategies for {pair} on {timeframe}...")
+                rank_results = []
+                for i, key in enumerate(STRATEGY_PROFILES.keys()):
+                    st.progress((i + 1) / len(STRATEGY_PROFILES), text=f"Testing '{STRATEGY_PROFILES[key]['name']}'...")
+                    _, _, stats = run_backtest(
+                        pair=pair,
+                        timeframe=timeframe,
+                        df=replay_df,
+                        sl_atr=sl_atr,
+                        tp_atr=tp_atr,
+                        risk_pct=risk_pct,
+                        spread_pips=spread_pips,
+                        use_mtf_filter=use_mtf_filter,
+                        strategy_key=key,
+                    )
+                    score = (stats.get("sharpe", -99) * stats.get("profit_factor", 0)) if "error" not in stats else -999
+                    rank_results.append({"key": key, "score": score, "stats": stats})
+
+                best_strat = max(rank_results, key=lambda x: x["score"])
+                final_strategy = best_strat["key"]
+                st.success(f"Best strategy found: **{STRATEGY_PROFILES[final_strategy]['name']}** (Score: {best_strat['score']:.2f})")
+                st.caption("Now running full backtest with the winning strategy...")
+
             eq, trades, stats = run_backtest(
                 pair=pair,
                 timeframe=timeframe,
@@ -504,8 +600,23 @@ def app() -> None:
                 risk_pct=risk_pct,
                 spread_pips=spread_pips,
                 use_mtf_filter=use_mtf_filter,
+                strategy_key=final_strategy,
+                progress_cb=_on_progress,
             )
-            st.session_state["last_bt"] = (eq, trades, stats, pair, timeframe, replay_bars, str(bt_start_date), str(bt_end_date))
+            progress_bar.progress(100, text="Backtest complete: 100%")
+            progress_placeholder.info("Run complete. Results below are from this explicit run only.")
+            st.session_state["last_bt"] = (eq, trades, stats)
+            st.session_state["last_bt_meta"] = current_meta
+            st.session_state["last_bt_meta"]["strategy_key"] = final_strategy  # Update meta with the one that ran
+
+        if "last_bt" not in st.session_state:
+            st.info("No backtest results yet. Configure params and click 'Run robust backtest'.")
+            st.stop()
+
+        eq, trades, stats = st.session_state["last_bt"]
+        last_meta = st.session_state.get("last_bt_meta", {})
+        if last_meta and last_meta != current_meta:
+            st.warning("Parameters changed after last run. Click 'Run robust backtest' to refresh results.")
 
         if "error" in stats:
             st.warning(stats["error"])
